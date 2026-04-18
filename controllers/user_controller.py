@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from models.user_model import User
-from schemas.user_schema import UserCreate
+from schemas.user_schema import UserCreate, UserLogin
+from auth.auth_handler import hash_password, verify_password, create_access_token
 
 
 def get_all_users(db: Session):
@@ -13,12 +14,14 @@ def create_user(user: UserCreate, db: Session):
     if existing_user:
         return None
 
+    hashed_password = hash_password(user.password)
+
     new_user = User(
         firstname=user.firstname,
         lastname=user.lastname,
         email=user.email,
         phone=user.phone,
-        password=user.password,
+        password=hashed_password,
         gender=user.gender
     )
 
@@ -27,3 +30,20 @@ def create_user(user: UserCreate, db: Session):
     db.refresh(new_user)
 
     return new_user
+
+
+def login_user(user: UserLogin, db: Session):
+    existing_user = db.query(User).filter(User.email == user.email).first()
+
+    if not existing_user:
+        return None
+
+    if not verify_password(user.password, existing_user.password):
+        return None
+
+    token = create_access_token(data={'sub': existing_user.email})
+
+    return {
+        'access_token': token,
+        'token_type': 'bearer'
+    }
