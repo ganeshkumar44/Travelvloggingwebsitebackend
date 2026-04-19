@@ -26,7 +26,20 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     return created_user
 
 @router.post('/login', response_model=TokenResponse)
-def login(
+def login(user: UserLogin, db: Session = Depends(get_db)):
+    logged_in_user = login_user(user, db)
+
+    if not logged_in_user:
+        raise HTTPException(
+            status_code=401,
+            detail='Invalid email or password'
+        )
+
+    return logged_in_user
+
+
+@router.post('/loginform', response_model=TokenResponse)
+def login_form(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
