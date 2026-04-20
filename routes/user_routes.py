@@ -3,8 +3,20 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from database import get_db
-from controllers.user_controller import get_all_users, create_user, login_user
-from schemas.user_schema import UserCreate, UserResponse, UserLogin, TokenResponse
+from controllers.user_controller import (
+    get_all_users,
+    create_user,
+    login_user,
+    verify_registration_otp,
+)
+from schemas.user_schema import (
+    UserCreate,
+    UserResponse,
+    UserLogin,
+    TokenResponse,
+    RegistrationOtpVerify,
+    EmailVerificationSuccess,
+)
 from auth.auth_handler import verify_token
 from models.user_model import User
 
@@ -25,6 +37,15 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         )
 
     return created_user
+
+
+@router.post('/verify-registration-otp', response_model=EmailVerificationSuccess)
+def verify_registration_otp_route(
+    payload: RegistrationOtpVerify,
+    db: Session = Depends(get_db),
+):
+    return verify_registration_otp(payload, db)
+
 
 @router.post('/login', response_model=TokenResponse)
 def login(user: UserLogin, db: Session = Depends(get_db)):

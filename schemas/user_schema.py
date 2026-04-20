@@ -41,6 +41,23 @@ class UserCreate(BaseModel):
             raise ValueError('Password and Confirm Password do not match')
         return self
 
+class RegistrationOtpVerify(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=1, description='6-digit verification code')
+
+    @field_validator('otp')
+    @classmethod
+    def otp_six_digits(cls, v: str) -> str:
+        t = v.strip()
+        if len(t) != 6 or not t.isdigit():
+            raise ValueError('OTP must be a 6-digit numeric code')
+        return t
+
+
+class EmailVerificationSuccess(BaseModel):
+    message: str
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str

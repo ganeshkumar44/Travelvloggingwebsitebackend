@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from auth.auth_handler import hash_password, verify_password, create_access_token
 from models.user_model import User
-from schemas.user_schema import UserCreate, UserLogin
+from schemas.user_schema import UserCreate, UserLogin, RegistrationOtpVerify
 from services.registration_email import RegistrationEmailError, send_registration_email
 
 
@@ -76,9 +76,56 @@ def login_user(user: UserLogin, db: Session):
     if not verify_password(user.password, existing_user.password):
         return None
 
+    if not existing_user.is_verified:
+        raise HTTPException(
+            status_code=403,
+            detail='Your email is not verified. Please verify your OTP before login.',
+        )
+
     token = create_access_token(data={'sub': existing_user.email})
 
     return {
         'access_token': token,
         'token_type': 'bearer'
     }
+
+
+def verify_registration_otp(payload: RegistrationOtpVerify, db: Session):
+    entered_email_lower = payload.email.lower()
+    otp = payload.otp.strip()
+
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == entered_email_lower)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail='Invalid email or verification code.',
+        )
+
+    if user.is_verified:
+        raise HTTPException(
+            status_code=400,
+            detail='Email is already verified.',
+        )
+
+    if user.firsttime_register_code is None:
+        raise HTTPException(
+            status_code=400,
+            detail='No verification code pending for this account.',
+        )
+
+    if user.firsttime_register_code != otp:
+        raise HTTPException(
+            status_code=400,
+            detail='Invalid email or verification code.',
+        )
+
+    user.firsttime_register_code = None
+    user.is_verified = True
+    db.commit()
+
+    return {'message': 'Email verification completed successfully.'}
