@@ -15,5 +15,6 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     forget_password_code = Column(String(10), nullable=True)
     forget_password_code_expires = Column(TIMESTAMP, nullable=True)
+    firsttime_register_code = Column(String(6), nullable=True)
     created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
