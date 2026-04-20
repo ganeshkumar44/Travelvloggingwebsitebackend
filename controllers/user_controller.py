@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models.user_model import User
 from schemas.user_schema import UserCreate, UserLogin
@@ -33,7 +34,12 @@ def create_user(user: UserCreate, db: Session):
 
 
 def login_user(user: UserLogin, db: Session):
-    existing_user = db.query(User).filter(User.email == user.email).first()
+    entered_email_lower = user.email.lower()
+    existing_user = (
+        db.query(User)
+        .filter(func.lower(User.email) == entered_email_lower)
+        .first()
+    )
 
     if not existing_user:
         return None
