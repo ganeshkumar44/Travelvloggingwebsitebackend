@@ -6,6 +6,7 @@ from database import get_db
 from controllers.user_controller import get_all_users, create_user, login_user
 from schemas.user_schema import UserCreate, UserResponse, UserLogin, TokenResponse
 from auth.auth_handler import verify_token
+from models.user_model import User
 
 router = APIRouter(tags=['Users'])
 
@@ -59,8 +60,24 @@ def login_form(
     return logged_in_user
 
 @router.get('/profile')
-def get_profile(current_user: str = Depends(verify_token)):
+def get_profile(
+    current_user: str = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail='User not found'
+        )
+
     return {
         'message': 'Profile fetched successfully',
-        'email': current_user
+        'firstname': user.firstname,
+        'lastname': user.lastname,
+        'email': user.email,
+        'phone': user.phone,
+        'gender': user.gender,
+        'role': user.role
     }
