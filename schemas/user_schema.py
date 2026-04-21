@@ -1,7 +1,7 @@
 import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 PASSWORD_PATTERN = re.compile(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@$%&])[a-zA-Z0-9!@$%&]{8,}$'
@@ -78,6 +78,40 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    firstname: str = Field(..., min_length=1, max_length=100, description='First name is required')
+    lastname: str = Field(..., min_length=1, max_length=100, description='Last name is required')
+    phone: Optional[str] = Field(default=None, max_length=20)
+    gender: Optional[Literal['Male', 'Female', 'Other']] = None
+    about_author: Optional[str] = None
+    profession: Optional[str] = Field(default=None, max_length=150)
+
+    @field_validator('firstname')
+    @classmethod
+    def firstname_required(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('First name is required')
+        return v.strip()
+
+    @field_validator('lastname')
+    @classmethod
+    def lastname_required(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('Last name is required')
+        return v.strip()
+
+    @field_validator('phone', 'about_author', 'profession', mode='before')
+    @classmethod
+    def optional_empty_to_none(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
 
 
 RESET_PASSWORD_PATTERN = re.compile(

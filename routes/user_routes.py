@@ -11,6 +11,7 @@ from controllers.user_controller import (
     request_forgot_password,
     verify_forgot_password_otp,
     reset_password_after_forgot,
+    update_user_profile,
 )
 from schemas.user_schema import (
     UserCreate,
@@ -25,6 +26,7 @@ from schemas.user_schema import (
     VerifyForgotPasswordOtpSuccess,
     ResetPasswordRequest,
     ResetPasswordSuccess,
+    ProfileUpdateRequest,
 )
 from auth.auth_handler import verify_token
 from models.user_model import User
@@ -137,3 +139,12 @@ def get_profile(
         'about_author': user.about_author,
         'profession': user.profession,
     }
+
+
+@router.patch('/profile')
+def update_profile(
+    payload: ProfileUpdateRequest,
+    current_user: str = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    return update_user_profile(current_user, payload, db)

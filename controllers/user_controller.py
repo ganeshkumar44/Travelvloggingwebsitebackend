@@ -9,6 +9,7 @@ from auth.auth_handler import hash_password, verify_password, create_access_toke
 from models.user_model import User
 from schemas.user_schema import (
     ForgotPasswordOtpVerify,
+    ProfileUpdateRequest,
     ResetPasswordRequest,
     UserCreate,
     UserLogin,
@@ -278,3 +279,41 @@ def reset_password_after_forgot(payload: ResetPasswordRequest, db: Session):
     db.commit()
 
     return {'message': 'Your password has been reset successfully.'}
+
+
+def update_user_profile(current_email: str, payload: ProfileUpdateRequest, db: Session):
+    user = db.query(User).filter(User.email == current_email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail='User not found',
+        )
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    for key in (
+        'firstname',
+        'lastname',
+        'phone',
+        'gender',
+        'about_author',
+        'profession',
+    ):
+        if key in updates:
+            setattr(user, key, updates[key])
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        'message': 'Profile updated successfully',
+        'firstname': user.firstname,
+        'lastname': user.lastname,
+        'email': user.email,
+        'phone': user.phone,
+        'gender': user.gender,
+        'role': user.role,
+        'about_author': user.about_author,
+        'profession': user.profession,
+    }
