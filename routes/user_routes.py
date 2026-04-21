@@ -8,6 +8,9 @@ from controllers.user_controller import (
     create_user,
     login_user,
     verify_registration_otp,
+    request_forgot_password,
+    verify_forgot_password_otp,
+    reset_password_after_forgot,
 )
 from schemas.user_schema import (
     UserCreate,
@@ -16,6 +19,12 @@ from schemas.user_schema import (
     TokenResponse,
     RegistrationOtpVerify,
     EmailVerificationSuccess,
+    ForgotPasswordRequest,
+    ForgotPasswordSuccess,
+    ForgotPasswordOtpVerify,
+    VerifyForgotPasswordOtpSuccess,
+    ResetPasswordRequest,
+    ResetPasswordSuccess,
 )
 from auth.auth_handler import verify_token
 from models.user_model import User
@@ -45,6 +54,30 @@ def verify_registration_otp_route(
     db: Session = Depends(get_db),
 ):
     return verify_registration_otp(payload, db)
+
+
+@router.post('/forgot-password', response_model=ForgotPasswordSuccess)
+def forgot_password_route(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    return request_forgot_password(payload.email, db)
+
+
+@router.post('/verify-forgot-password-otp', response_model=VerifyForgotPasswordOtpSuccess)
+def verify_forgot_password_otp_route(
+    payload: ForgotPasswordOtpVerify,
+    db: Session = Depends(get_db),
+):
+    return verify_forgot_password_otp(payload, db)
+
+
+@router.post('/reset-password', response_model=ResetPasswordSuccess)
+def reset_password_route(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    return reset_password_after_forgot(payload, db)
 
 
 @router.post('/login', response_model=TokenResponse)

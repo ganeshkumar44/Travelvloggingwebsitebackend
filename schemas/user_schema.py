@@ -78,3 +78,64 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+RESET_PASSWORD_PATTERN = re.compile(
+    r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%&])[a-zA-Z0-9!@#$%&]{8,}$'
+)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordSuccess(BaseModel):
+    message: str
+
+
+class ForgotPasswordOtpVerify(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=1, description='6-digit verification code')
+
+    @field_validator('otp')
+    @classmethod
+    def otp_six_digits(cls, v: str) -> str:
+        t = v.strip()
+        if len(t) != 6 or not t.isdigit():
+            raise ValueError('OTP must be a 6-digit numeric code')
+        return t
+
+
+class VerifyForgotPasswordOtpSuccess(BaseModel):
+    message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    new_password: str = Field(..., min_length=1, description='New password is required')
+    confirm_password: str = Field(
+        ...,
+        min_length=1,
+        description='Confirm password is required',
+    )
+
+    @field_validator('new_password')
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not RESET_PASSWORD_PATTERN.fullmatch(v):
+            raise ValueError(
+                'Password must be at least 8 characters and include at least one '
+                'lowercase letter, one uppercase letter, one number, and one special '
+                'character from !@#$%& only'
+            )
+        return v
+
+    @model_validator(mode='after')
+    def passwords_match(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError('Password and Confirm Password do not match')
+        return self
+
+
+class ResetPasswordSuccess(BaseModel):
+    message: str

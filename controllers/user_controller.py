@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -6,7 +7,14 @@ from sqlalchemy.orm import Session
 
 from auth.auth_handler import hash_password, verify_password, create_access_token
 from models.user_model import User
-from schemas.user_schema import UserCreate, UserLogin, RegistrationOtpVerify
+from schemas.user_schema import (
+    ForgotPasswordOtpVerify,
+    ResetPasswordRequest,
+    UserCreate,
+    UserLogin,
+    RegistrationOtpVerify,
+)
+from services.forgot_password_email import ForgotPasswordEmailError, send_forgot_password_otp_email
 from services.registration_email import RegistrationEmailError, send_registration_email
 
 
@@ -129,3 +137,144 @@ def verify_registration_otp(payload: RegistrationOtpVerify, db: Session):
     db.commit()
 
     return {'message': 'Email verification completed successfully.'}
+
+
+def _generate_unique_forget_password_code(db: Session) -> str:
+    for _ in range(100):
+        code = f'{secrets.randbelow(1_000_000):06d}'
+        taken = (
+            db.query(User.id)
+            .filter(User.forget_password_code == code)
+            .first()
+        )
+        if not taken:
+            return code
+    raise HTTPException(
+        status_code=500,
+        detail='Could not generate a unique verification code. Please try again.',
+    )
+
+
+def request_forgot_password(email: str, db: Session):
+    entered_email_lower = email.lower()
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == entered_email_lower)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail='No account is registered with this email address.',
+        )
+
+    otp = _generate_unique_forget_password_code(db)
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    user.forget_password_code = otp
+    user.forget_password_code_expires = expires_at
+    db.commit()
+    db.refresh(user)
+
+    try:
+        send_forgot_password_otp_email(user.email, otp)
+    except ForgotPasswordEmailError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {
+        'message': 'A verification code has been sent to your email address.',
+    }
+
+
+def verify_forgot_password_otp(payload: ForgotPasswordOtpVerify, db: Session):
+    entered_email_lower = payload.email.lower()
+    otp = payload.otp.strip()
+
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == entered_email_lower)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail='Invalid email or verification code.',
+        )
+
+    if user.forget_password_code is None and user.forget_password_code_expires is None:
+        raise HTTPException(
+            status_code=400,
+            detail='No password reset verification is pending for this account.',
+        )
+
+    if user.forget_password_code is None and user.forget_password_code_expires is not None:
+        if user.forget_password_code_expires > datetime.utcnow():
+            raise HTTPException(
+                status_code=400,
+                detail='This email has already been verified. Please proceed to reset your password.',
+            )
+        raise HTTPException(
+            status_code=400,
+            detail='No password reset verification is pending for this account.',
+        )
+
+    if user.forget_password_code_expires is None:
+        raise HTTPException(
+            status_code=400,
+            detail='No password reset verification is pending for this account.',
+        )
+
+    if user.forget_password_code_expires <= datetime.utcnow():
+        raise HTTPException(
+            status_code=400,
+            detail='This verification code has expired. Please request a new code.',
+        )
+
+    if user.forget_password_code != otp:
+        raise HTTPException(
+            status_code=400,
+            detail='Invalid email or verification code.',
+        )
+
+    user.forget_password_code = None
+    user.forget_password_code_expires = datetime.utcnow() + timedelta(minutes=10)
+    db.commit()
+
+    return {
+        'message': 'Verification successful. You may now reset your password.',
+    }
+
+
+def reset_password_after_forgot(payload: ResetPasswordRequest, db: Session):
+    entered_email_lower = payload.email.lower()
+
+    user = (
+        db.query(User)
+        .filter(func.lower(User.email) == entered_email_lower)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail='No account is registered with this email address.',
+        )
+
+    if (
+        user.forget_password_code is not None
+        or user.forget_password_code_expires is None
+        or user.forget_password_code_expires <= datetime.utcnow()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail='Password reset is not allowed. Please verify your OTP again or request a new code.',
+        )
+
+    user.password = hash_password(payload.new_password)
+    user.forget_password_code = None
+    user.forget_password_code_expires = None
+    db.commit()
+
+    return {'message': 'Your password has been reset successfully.'}
