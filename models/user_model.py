@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, text
+from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, Text, text
 from database import Base
 
 class User(Base):
@@ -11,6 +11,8 @@ class User(Base):
     phone = Column(String(20))
     password = Column(String(255), nullable=False)
     gender = Column(String(20))
+    about_author = Column(Text, nullable=True)
+    profession = Column(String(150), nullable=True)
     role = Column(String(50), default='user')
     is_verified = Column(Boolean, default=False)
     forget_password_code = Column(String(10), nullable=True)

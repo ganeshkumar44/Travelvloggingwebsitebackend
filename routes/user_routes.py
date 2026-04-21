@@ -133,5 +133,7 @@ def get_profile(
         'email': user.email,
         'phone': user.phone,
         'gender': user.gender,
-        'role': user.role
+        'role': user.role,
+        'about_author': user.about_author,
+        'profession': user.profession,
     }
