@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
-from routes.user_routes import router as user_router
+from routes.user_routes import profile_router, router as user_router
 
 load_dotenv()
 
@@ -26,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(user_router)
+app.include_router(profile_router)
 
 @app.get('/')
 def home():

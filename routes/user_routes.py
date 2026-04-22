@@ -12,6 +12,7 @@ from controllers.user_controller import (
     verify_forgot_password_otp,
     reset_password_after_forgot,
     update_user_profile,
+    delete_user_account,
 )
 from schemas.user_schema import (
     UserCreate,
@@ -27,6 +28,8 @@ from schemas.user_schema import (
     ResetPasswordRequest,
     ResetPasswordSuccess,
     ProfileUpdateRequest,
+    DeleteProfileRequest,
+    DeleteProfileSuccess,
 )
 from auth.auth_handler import verify_token
 from models.user_model import User
@@ -115,7 +118,11 @@ def login_form(
 
     return logged_in_user
 
-@router.get('/profile')
+
+profile_router = APIRouter(tags=['Profile'])
+
+
+@profile_router.get('/profile')
 def get_profile(
     current_user: str = Depends(verify_token),
     db: Session = Depends(get_db)
@@ -147,10 +154,19 @@ def get_profile(
     }
 
 
-@router.patch('/profile')
+@profile_router.patch('/profile')
 def update_profile(
     payload: ProfileUpdateRequest,
     current_user: str = Depends(verify_token),
     db: Session = Depends(get_db),
 ):
     return update_user_profile(current_user, payload, db)
+
+
+@profile_router.delete('/profile', response_model=DeleteProfileSuccess)
+def delete_profile(
+    payload: DeleteProfileRequest,
+    current_user: str = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    return delete_user_account(current_user, payload, db)

@@ -191,6 +191,17 @@ class ProfileUpdateRequest(BaseModel):
         return _validate_profile_url_field(v, 'Instagram URL')
 
 
+class DeleteProfileRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    email: EmailStr
+    password: str = Field(..., min_length=1, description='Current password is required')
+
+
+class DeleteProfileSuccess(BaseModel):
+    message: str
+
+
 RESET_PASSWORD_PATTERN = re.compile(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%&])[a-zA-Z0-9!@#$%&]{8,}$'
 )

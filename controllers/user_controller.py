@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from auth.auth_handler import hash_password, verify_password, create_access_token
 from models.user_model import User
 from schemas.user_schema import (
+    DeleteProfileRequest,
     ForgotPasswordOtpVerify,
     ProfileUpdateRequest,
     ResetPasswordRequest,
@@ -329,3 +330,30 @@ def update_user_profile(current_email: str, payload: ProfileUpdateRequest, db: S
         'youtube': user.youtube,
         'instagram': user.instagram,
     }
+
+
+def delete_user_account(current_email: str, payload: DeleteProfileRequest, db: Session):
+    user = db.query(User).filter(User.email == current_email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail='User not found',
+        )
+
+    if payload.email.lower() != user.email.lower():
+        raise HTTPException(
+            status_code=403,
+            detail='The email address does not match the signed-in account.',
+        )
+
+    if not verify_password(payload.password, user.password):
+        raise HTTPException(
+            status_code=401,
+            detail='The password is incorrect.',
+        )
+
+    db.delete(user)
+    db.commit()
+
+    return {'message': 'Your account has been deleted successfully.'}
