@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from auth.auth_handler import hash_password, verify_password, create_access_token
 from models.user_model import User
 from schemas.user_schema import (
+    ChangePasswordRequest,
     DeleteProfileRequest,
     ForgotPasswordOtpVerify,
     ProfileUpdateRequest,
@@ -357,3 +358,24 @@ def delete_user_account(current_email: str, payload: DeleteProfileRequest, db: S
     db.commit()
 
     return {'message': 'Your account has been deleted successfully.'}
+
+
+def change_user_password(current_email: str, payload: ChangePasswordRequest, db: Session):
+    user = db.query(User).filter(User.email == current_email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail='User not found',
+        )
+
+    if not verify_password(payload.current_password, user.password):
+        raise HTTPException(
+            status_code=400,
+            detail='The current password is incorrect.',
+        )
+
+    user.password = hash_password(payload.new_password)
+    db.commit()
+
+    return {'message': 'Your password has been changed successfully.'}

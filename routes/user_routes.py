@@ -13,6 +13,7 @@ from controllers.user_controller import (
     reset_password_after_forgot,
     update_user_profile,
     delete_user_account,
+    change_user_password,
 )
 from schemas.user_schema import (
     UserCreate,
@@ -30,6 +31,8 @@ from schemas.user_schema import (
     ProfileUpdateRequest,
     DeleteProfileRequest,
     DeleteProfileSuccess,
+    ChangePasswordRequest,
+    ChangePasswordSuccess,
 )
 from auth.auth_handler import verify_token
 from models.user_model import User
@@ -161,6 +164,15 @@ def update_profile(
     db: Session = Depends(get_db),
 ):
     return update_user_profile(current_user, payload, db)
+
+
+@profile_router.post('/profile/change-password', response_model=ChangePasswordSuccess)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: str = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    return change_user_password(current_user, payload, db)
 
 
 @profile_router.delete('/profile', response_model=DeleteProfileSuccess)

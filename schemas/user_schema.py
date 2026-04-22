@@ -207,6 +207,47 @@ RESET_PASSWORD_PATTERN = re.compile(
 )
 
 
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    current_password: str = Field(
+        ...,
+        min_length=1,
+        description='Current password is required',
+    )
+    new_password: str = Field(
+        ...,
+        min_length=1,
+        description='New password is required',
+    )
+    confirm_new_password: str = Field(
+        ...,
+        min_length=1,
+        description='Confirm new password is required',
+    )
+
+    @field_validator('new_password')
+    @classmethod
+    def new_password_strength(cls, v: str) -> str:
+        if not RESET_PASSWORD_PATTERN.fullmatch(v):
+            raise ValueError(
+                'Password must be at least 8 characters and include at least one '
+                'lowercase letter, one uppercase letter, one number, and one special '
+                'character from !@#$%& only',
+            )
+        return v
+
+    @model_validator(mode='after')
+    def new_passwords_match(self):
+        if self.new_password != self.confirm_new_password:
+            raise ValueError('New password and confirm new password do not match')
+        return self
+
+
+class ChangePasswordSuccess(BaseModel):
+    message: str
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
