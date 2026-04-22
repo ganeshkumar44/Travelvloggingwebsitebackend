@@ -1,11 +1,34 @@
 import re
 from typing import Literal, Optional
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 PASSWORD_PATTERN = re.compile(
     r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@$%&])[a-zA-Z0-9!@$%&]{8,}$'
 )
+
+PROFILE_USERNAME_PATTERN = re.compile(
+    r'^(?:[A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9._-]{0,148}[A-Za-z0-9])$',
+)
+
+
+def _validate_profile_url_field(v: Optional[str], label: str) -> Optional[str]:
+    if v is None:
+        return None
+    t = v.strip() if isinstance(v, str) else str(v)
+    if not t:
+        return None
+    p = urlparse(t)
+    if p.scheme not in ('http', 'https'):
+        raise ValueError(
+            f'{label} must be a valid http or https profile URL.',
+        )
+    if not p.netloc:
+        raise ValueError(
+            f'{label} must be a valid profile URL.',
+        )
+    return t
 
 
 class UserCreate(BaseModel):
@@ -89,6 +112,12 @@ class ProfileUpdateRequest(BaseModel):
     gender: Optional[Literal['Male', 'Female', 'Other']] = None
     about_author: Optional[str] = None
     profession: Optional[str] = Field(default=None, max_length=150)
+    username: Optional[str] = Field(default=None, max_length=150)
+    facebook: Optional[str] = Field(default=None, max_length=500)
+    twitter: Optional[str] = Field(default=None, max_length=500)
+    linkedin: Optional[str] = Field(default=None, max_length=500)
+    youtube: Optional[str] = Field(default=None, max_length=500)
+    instagram: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator('firstname')
     @classmethod
@@ -104,7 +133,18 @@ class ProfileUpdateRequest(BaseModel):
             raise ValueError('Last name is required')
         return v.strip()
 
-    @field_validator('phone', 'about_author', 'profession', mode='before')
+    @field_validator(
+        'phone',
+        'about_author',
+        'profession',
+        'username',
+        'facebook',
+        'twitter',
+        'linkedin',
+        'youtube',
+        'instagram',
+        mode='before',
+    )
     @classmethod
     def optional_empty_to_none(cls, v):
         if v is None:
@@ -112,6 +152,43 @@ class ProfileUpdateRequest(BaseModel):
         if isinstance(v, str) and v.strip() == '':
             return None
         return v
+
+    @field_validator('username', mode='after')
+    @classmethod
+    def username_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if not PROFILE_USERNAME_PATTERN.fullmatch(v):
+            raise ValueError(
+                'Username may only use letters, numbers, periods, underscores, and hyphens '
+                '(1-150 characters; invalid or special characters are not allowed).',
+            )
+        return v
+
+    @field_validator('facebook', mode='after')
+    @classmethod
+    def validate_facebook_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_profile_url_field(v, 'Facebook URL')
+
+    @field_validator('twitter', mode='after')
+    @classmethod
+    def validate_twitter_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_profile_url_field(v, 'Twitter URL')
+
+    @field_validator('linkedin', mode='after')
+    @classmethod
+    def validate_linkedin_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_profile_url_field(v, 'LinkedIn URL')
+
+    @field_validator('youtube', mode='after')
+    @classmethod
+    def validate_youtube_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_profile_url_field(v, 'YouTube URL')
+
+    @field_validator('instagram', mode='after')
+    @classmethod
+    def validate_instagram_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_profile_url_field(v, 'Instagram URL')
 
 
 RESET_PASSWORD_PATTERN = re.compile(

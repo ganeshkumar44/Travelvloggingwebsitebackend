@@ -299,6 +299,12 @@ def update_user_profile(current_email: str, payload: ProfileUpdateRequest, db: S
         'gender',
         'about_author',
         'profession',
+        'username',
+        'facebook',
+        'twitter',
+        'linkedin',
+        'youtube',
+        'instagram',
     ):
         if key in updates:
             setattr(user, key, updates[key])
@@ -310,10 +316,16 @@ def update_user_profile(current_email: str, payload: ProfileUpdateRequest, db: S
         'message': 'Profile updated successfully',
         'firstname': user.firstname,
         'lastname': user.lastname,
+        'username': user.username,
         'email': user.email,
         'phone': user.phone,
         'gender': user.gender,
         'role': user.role,
         'about_author': user.about_author,
         'profession': user.profession,
+        'facebook': user.facebook,
+        'twitter': user.twitter,
+        'linkedin': user.linkedin,
+        'youtube': user.youtube,
+        'instagram': user.instagram,
     }
