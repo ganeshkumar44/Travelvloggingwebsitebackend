@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models.story_model import Story, StoryReaction, Tag
+from models.story_model import Story, StoryComment, StoryReaction, Tag
 from models.user_model import User
 
 
@@ -189,4 +189,48 @@ def react_to_story(
         'message': 'Reaction updated successfully',
         'total_likes': total_likes,
         'total_dislikes': total_dislikes,
+    }
+
+
+def add_story_comment(
+    db: Session,
+    user_id: int,
+    story_id: int,
+    comment: str,
+    parent_comment_id: Optional[int] = None,
+) -> dict:
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail='Story not found')
+
+    body = (comment or '').strip()
+    if not body:
+        raise HTTPException(status_code=400, detail='Comment cannot be empty')
+
+    if parent_comment_id is not None:
+        parent = (
+            db.query(StoryComment)
+            .filter(StoryComment.id == parent_comment_id)
+            .first()
+        )
+        if not parent:
+            raise HTTPException(status_code=400, detail='Parent comment not found')
+        if parent.story_id != story_id:
+            raise HTTPException(
+                status_code=400,
+                detail='Parent comment does not belong to this story',
+            )
+
+    row = StoryComment(
+        story_id=story_id,
+        user_id=user_id,
+        parent_comment_id=parent_comment_id,
+        comment=body,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {
+        'message': 'Comment added successfully',
+        'comment': row,
     }

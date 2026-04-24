@@ -41,3 +41,20 @@ class StoryReaction(Base):
     story_id = Column(Integer, ForeignKey('stories.id', ondelete='CASCADE'), primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     reaction_type = Column(String(20), nullable=False)
+
+
+class StoryComment(Base):
+    __tablename__ = 'story_comments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    story_id = Column(Integer, ForeignKey('stories.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    parent_comment_id = Column(
+        Integer,
+        ForeignKey('story_comments.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+    )
+    comment = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))

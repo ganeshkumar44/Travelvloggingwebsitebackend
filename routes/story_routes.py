@@ -17,6 +17,7 @@ from auth.auth_handler import verify_token
 from database import get_db
 from controllers.story_controller import (
     STORY_IMAGE_MAX_BYTES,
+    add_story_comment,
     create_story_record,
     get_user_id_by_email,
     react_to_story,
@@ -24,6 +25,8 @@ from controllers.story_controller import (
 )
 from schemas.story_schema import (
     TAGS_MULTIPART_FORM_DESCRIPTION,
+    StoryCommentCreatedResponse,
+    StoryCommentRequest,
     StoryCreateFromJson,
     StoryCreatedResponse,
     StoryReactRequest,
@@ -73,6 +76,30 @@ def post_story_reaction(
         user_id=current_user_id,
         story_id=body.story_id,
         reaction_type=body.reaction_type,
+    )
+
+
+@router.post(
+    '/stories/comment',
+    response_model=StoryCommentCreatedResponse,
+    summary='Add a comment on a story',
+    description=(
+        '**Authorize** with Bearer token. '
+        'Body: `story_id` and `comment` (user from token only). '
+        'Optional `parent_comment_id` to reply to an existing comment (must be on the same story).'
+    ),
+)
+def post_story_comment(
+    body: StoryCommentRequest,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    return add_story_comment(
+        db=db,
+        user_id=current_user_id,
+        story_id=body.story_id,
+        comment=body.comment,
+        parent_comment_id=body.parent_comment_id,
     )
 
 

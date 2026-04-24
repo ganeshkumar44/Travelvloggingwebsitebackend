@@ -100,6 +100,31 @@ class StoryReactResponse(BaseModel):
     total_dislikes: int
 
 
+class StoryCommentRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    story_id: int = Field(..., ge=1)
+    comment: str = Field(..., min_length=1)
+    parent_comment_id: Optional[int] = Field(default=None, ge=1)
+
+
+class StoryCommentItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    story_id: int
+    user_id: int
+    parent_comment_id: Optional[int] = None
+    comment: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class StoryCommentCreatedResponse(BaseModel):
+    message: str = 'Comment added successfully'
+    comment: StoryCommentItemResponse
+
+
 def get_post_stories_openapi_extra() -> dict[str, Any]:
     """
     Request body for POST /stories (JSON). Multipart is documented on POST /stories/upload.
