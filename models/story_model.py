@@ -33,3 +33,11 @@ class Story(Base):
     created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     tag_links = relationship('Tag', secondary=story_tags, back_populates='stories')
+
+
+class StoryReaction(Base):
+    __tablename__ = 'story_reactions'
+
+    story_id = Column(Integer, ForeignKey('stories.id', ondelete='CASCADE'), primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    reaction_type = Column(String(20), nullable=False)

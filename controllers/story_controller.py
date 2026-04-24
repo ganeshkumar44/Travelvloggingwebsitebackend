@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models.story_model import Story, Tag
+from models.story_model import Story, StoryReaction, Tag
 from models.user_model import User
 
 
@@ -128,3 +128,65 @@ def create_story_record(
     db.commit()
     db.refresh(story)
     return story
+
+
+REACTION_LIKE = 'like'
+REACTION_DISLIKE = 'dislike'
+
+
+def _reaction_type_counts_for_story(db: Session, story_id: int) -> tuple[int, int]:
+    total_likes = (
+        db.query(StoryReaction)
+        .filter(
+            StoryReaction.story_id == story_id,
+            StoryReaction.reaction_type == REACTION_LIKE,
+        )
+        .count()
+    )
+    total_dislikes = (
+        db.query(StoryReaction)
+        .filter(
+            StoryReaction.story_id == story_id,
+            StoryReaction.reaction_type == REACTION_DISLIKE,
+        )
+        .count()
+    )
+    return total_likes, total_dislikes
+
+
+def react_to_story(
+    db: Session,
+    user_id: int,
+    story_id: int,
+    reaction_type: str,
+) -> dict:
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail='Story not found')
+
+    existing = (
+        db.query(StoryReaction)
+        .filter(StoryReaction.story_id == story_id, StoryReaction.user_id == user_id)
+        .first()
+    )
+
+    if existing is None:
+        db.add(
+            StoryReaction(
+                story_id=story_id,
+                user_id=user_id,
+                reaction_type=reaction_type,
+            )
+        )
+    elif existing.reaction_type == reaction_type:
+        db.delete(existing)
+    else:
+        existing.reaction_type = reaction_type
+
+    db.commit()
+    total_likes, total_dislikes = _reaction_type_counts_for_story(db, story_id)
+    return {
+        'message': 'Reaction updated successfully',
+        'total_likes': total_likes,
+        'total_dislikes': total_dislikes,
+    }

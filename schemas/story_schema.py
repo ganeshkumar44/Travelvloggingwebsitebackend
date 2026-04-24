@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -85,6 +85,19 @@ class StoryItemResponse(BaseModel):
 class StoryCreatedResponse(BaseModel):
     message: str = 'Story created successfully'
     story: StoryItemResponse
+
+
+class StoryReactRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    story_id: int = Field(..., ge=1)
+    reaction_type: Literal['like', 'dislike']
+
+
+class StoryReactResponse(BaseModel):
+    message: str
+    total_likes: int
+    total_dislikes: int
 
 
 def get_post_stories_openapi_extra() -> dict[str, Any]:

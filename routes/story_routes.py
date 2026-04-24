@@ -19,12 +19,15 @@ from controllers.story_controller import (
     STORY_IMAGE_MAX_BYTES,
     create_story_record,
     get_user_id_by_email,
+    react_to_story,
     save_uploaded_story_image_bytes,
 )
 from schemas.story_schema import (
     TAGS_MULTIPART_FORM_DESCRIPTION,
     StoryCreateFromJson,
     StoryCreatedResponse,
+    StoryReactRequest,
+    StoryReactResponse,
     get_post_stories_openapi_extra,
     normalize_multipart_tag_inputs,
 )
@@ -46,6 +49,31 @@ def get_current_user_id(
     The user's id is always taken from this token, never from the request body.
     """
     return get_user_id_by_email(db, current_user_email)
+
+
+@router.post(
+    '/stories/react',
+    response_model=StoryReactResponse,
+    summary='Like or dislike a story',
+    description=(
+        '**Authorize** with Bearer token. '
+        'Body: `story_id` and `reaction_type` (`"like"` or `"dislike"`). '
+        'The user is taken from the token only, not the body. '
+        'If you repeat the same reaction, it is removed (toggle). '
+        'A different reaction switches the vote.'
+    ),
+)
+def post_story_reaction(
+    body: StoryReactRequest,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    return react_to_story(
+        db=db,
+        user_id=current_user_id,
+        story_id=body.story_id,
+        reaction_type=body.reaction_type,
+    )
 
 
 def _validate_file_url(href: str) -> str:
