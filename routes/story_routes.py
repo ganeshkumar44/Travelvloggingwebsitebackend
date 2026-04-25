@@ -24,6 +24,7 @@ from controllers.story_controller import (
     create_story_record,
     get_all_stories,
     get_all_stories_v1,
+    get_story_by_id,
     get_user_id_and_role_by_email,
     get_user_id_by_email,
     react_to_story,
@@ -33,6 +34,7 @@ from controllers.story_controller import (
 from schemas.story_schema import (
     TAGS_MULTIPART_FORM_DESCRIPTION,
     AllStoriesV1Item,
+    StoryByIdResponse,
     StoryCommentCreatedResponse,
     StoryCommentRequest,
     StoryCreateFromJson,
@@ -112,6 +114,25 @@ def fetch_all_stories(db: Session = Depends(get_db)):
 )
 def fetch_all_stories_v1_endpoint(db: Session = Depends(get_db)):
     return get_all_stories_v1(db)
+
+
+@router.get(
+    '/v1/stories/{story_id}',
+    response_model=StoryByIdResponse,
+    summary='Fetch a single story by id',
+)
+def fetch_story_by_id(
+    story_id: Annotated[int, Path(ge=1, description='Story id')],
+    db: Session = Depends(get_db),
+):
+    story = get_story_by_id(db, story_id)
+    return {
+        'title': story.title,
+        'image': story.image,
+        'description': story.description,
+        'tags': story.tags,
+        'location': story.location,
+    }
 
 
 @router.patch(

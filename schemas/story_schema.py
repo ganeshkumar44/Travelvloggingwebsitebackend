@@ -82,6 +82,14 @@ class StoryItemResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class StoryByIdResponse(BaseModel):
+    title: str
+    image: str
+    description: str
+    tags: Optional[list[str]] = None
+    location: Optional[str] = None
+
+
 class StoryPatchJson(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

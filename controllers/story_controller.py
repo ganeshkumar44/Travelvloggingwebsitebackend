@@ -143,6 +143,13 @@ def get_all_stories(db: Session) -> list[Story]:
     return db.query(Story).order_by(Story.created_at.desc()).all()
 
 
+def get_story_by_id(db: Session, story_id: int) -> Story:
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail='Story not found')
+    return story
+
+
 REACTION_LIKE = 'like'
 REACTION_DISLIKE = 'dislike'
 
