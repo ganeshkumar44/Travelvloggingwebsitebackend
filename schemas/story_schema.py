@@ -90,6 +90,10 @@ class StoryByIdResponse(BaseModel):
     location: Optional[str] = None
 
 
+class StoryDeletedResponse(BaseModel):
+    message: str = 'Story deleted successfully'
+
+
 class StoryPatchJson(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

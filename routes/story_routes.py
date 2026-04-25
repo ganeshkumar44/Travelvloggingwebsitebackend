@@ -22,6 +22,7 @@ from controllers.story_controller import (
     STORY_IMAGE_MAX_BYTES,
     add_story_comment,
     create_story_record,
+    delete_story,
     get_all_stories,
     get_all_stories_v1,
     get_story_by_id,
@@ -35,6 +36,7 @@ from schemas.story_schema import (
     TAGS_MULTIPART_FORM_DESCRIPTION,
     AllStoriesV1Item,
     StoryByIdResponse,
+    StoryDeletedResponse,
     StoryCommentCreatedResponse,
     StoryCommentRequest,
     StoryCreateFromJson,
@@ -133,6 +135,32 @@ def fetch_story_by_id(
         'tags': story.tags,
         'location': story.location,
     }
+
+
+@router.delete(
+    '/v1/stories/{story_id}',
+    response_model=StoryDeletedResponse,
+    summary='Delete a story (owner or admin)',
+    description=(
+        '**Authorize** with Bearer token. **Story author** or **admin** can delete. '
+        'Related `story_tags`, `story_reactions`, and `story_comments` rows are removed when the DB uses ON DELETE CASCADE on those foreign keys.'
+    ),
+)
+def delete_story_v1(
+    story_id: Annotated[int, Path(ge=1, description='Story id')],
+    db: Session = Depends(get_db),
+    current_user_email: str = Depends(verify_token),
+):
+    requester_id, requester_role = get_user_id_and_role_by_email(
+        db, current_user_email
+    )
+    delete_story(
+        db=db,
+        story_id=story_id,
+        requester_id=requester_id,
+        requester_role=requester_role,
+    )
+    return {'message': 'Story deleted successfully'}
 
 
 @router.patch(

@@ -372,3 +372,22 @@ def update_story_partial(
     db.commit()
     db.refresh(story)
     return story
+
+
+def delete_story(
+    db: Session,
+    story_id: int,
+    requester_id: int,
+    requester_role: str,
+) -> None:
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail='Story not found')
+    is_admin = requester_role == 'admin'
+    if story.user_id != requester_id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Not authorized to delete this story',
+        )
+    db.delete(story)
+    db.commit()
