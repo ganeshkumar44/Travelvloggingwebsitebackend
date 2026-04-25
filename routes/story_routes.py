@@ -19,6 +19,7 @@ from controllers.story_controller import (
     STORY_IMAGE_MAX_BYTES,
     add_story_comment,
     create_story_record,
+    get_all_stories,
     get_user_id_by_email,
     react_to_story,
     save_uploaded_story_image_bytes,
@@ -29,6 +30,7 @@ from schemas.story_schema import (
     StoryCommentRequest,
     StoryCreateFromJson,
     StoryCreatedResponse,
+    StoryItemResponse,
     StoryReactRequest,
     StoryReactResponse,
     get_post_stories_openapi_extra,
@@ -41,6 +43,15 @@ UPLOAD_ROOT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     'uploads',
 )
+
+
+@router.get(
+    '/all-stories',
+    response_model=list[StoryItemResponse],
+    summary='Fetch all stories',
+)
+def fetch_all_stories(db: Session = Depends(get_db)):
+    return get_all_stories(db)
 
 
 def get_current_user_id(

@@ -130,6 +130,10 @@ def create_story_record(
     return story
 
 
+def get_all_stories(db: Session) -> list[Story]:
+    return db.query(Story).order_by(Story.created_at.desc()).all()
+
+
 REACTION_LIKE = 'like'
 REACTION_DISLIKE = 'dislike'
 
