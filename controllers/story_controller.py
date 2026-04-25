@@ -1,9 +1,10 @@
 import os
 import uuid
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional
 
-from fastapi import HTTPException
-from sqlalchemy import func
+from fastapi import HTTPException, status
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from models.story_model import Story, StoryComment, StoryReaction, Tag
@@ -26,6 +27,14 @@ def get_user_id_by_email(db: Session, email: str) -> int:
     if not user:
         raise HTTPException(status_code=404, detail='User not found')
     return user.id
+
+
+def get_user_id_and_role_by_email(db: Session, email: str) -> tuple[int, str]:
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    role = (user.role or 'user').strip().lower()
+    return user.id, role
 
 
 def _dedupe_tag_strings(tag_list: Optional[list[str]]) -> list[str]:
@@ -138,6 +147,67 @@ REACTION_LIKE = 'like'
 REACTION_DISLIKE = 'dislike'
 
 
+def get_all_stories_v1(db: Session) -> list[dict[str, object]]:
+    """
+    Single query: stories JOIN users, LEFT JOIN story_reactions, aggregate likes/dislikes.
+    """
+    total_likes = func.coalesce(
+        func.sum(
+            case(
+                (StoryReaction.reaction_type == REACTION_LIKE, 1),
+                else_=0,
+            )
+        ),
+        0,
+    ).label("total_likes")
+    total_dislikes = func.coalesce(
+        func.sum(
+            case(
+                (StoryReaction.reaction_type == REACTION_DISLIKE, 1),
+                else_=0,
+            )
+        ),
+        0,
+    ).label("total_dislikes")
+    rows = (
+        db.query(Story, User, total_likes, total_dislikes)
+        .join(User, Story.user_id == User.id)
+        .outerjoin(StoryReaction, Story.id == StoryReaction.story_id)
+        .group_by(Story.id, User.id)
+        .order_by(Story.created_at.desc())
+        .all()
+    )
+    out: list[dict[str, object]] = []
+    for story, user, likes, dislikes in rows:
+        out.append(
+            {
+                "id": story.id,
+                "user_id": story.user_id,
+                "image": story.image,
+                "title": story.title,
+                "description": story.description,
+                "location": story.location,
+                "tags": story.tags,
+                "created_at": story.created_at,
+                "updated_at": story.updated_at,
+                "user": {
+                    "firstname": user.firstname,
+                    "lastname": user.lastname,
+                    "facebook": user.facebook,
+                    "twitter": user.twitter,
+                    "linkedin": user.linkedin,
+                    "instagram": user.instagram,
+                    "youtube": user.youtube,
+                    "about_author": user.about_author,
+                    "profession": user.profession,
+                },
+                "total_likes": int(likes) if likes is not None else 0,
+                "total_dislikes": int(dislikes) if dislikes is not None else 0,
+            }
+        )
+    return out
+
+
 def _reaction_type_counts_for_story(db: Session, story_id: int) -> tuple[int, int]:
     total_likes = (
         db.query(StoryReaction)
@@ -238,3 +308,60 @@ def add_story_comment(
         'message': 'Comment added successfully',
         'comment': row,
     }
+
+
+def update_story_partial(
+    db: Session,
+    story_id: int,
+    requester_id: int,
+    requester_role: str,
+    updates: dict[str, Any],
+) -> Story:
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No fields to update',
+        )
+
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail='Story not found')
+
+    is_admin = requester_role == 'admin'
+    if story.user_id != requester_id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Not authorized to update this story',
+        )
+
+    if 'title' in updates:
+        story.title = str(updates['title'])[:500].strip()
+
+    if 'description' in updates:
+        story.description = updates['description']
+
+    if 'location' in updates:
+        loc = updates['location']
+        if loc is None or (isinstance(loc, str) and not str(loc).strip()):
+            story.location = None
+        else:
+            story.location = str(loc).strip()[:500]
+
+    if 'image' in updates:
+        story.image = str(updates['image']).strip()[:20_000]
+
+    if 'tags' in updates:
+        tag_source = updates['tags']
+        display_tags = _dedupe_tag_strings(
+            None if tag_source is None else list(tag_source),
+        )
+        story.tag_links.clear()
+        for t in display_tags:
+            story.tag_links.append(_get_or_create_tag(db, t))
+        story.tags = [t for t in display_tags] if display_tags else None
+        db.flush()
+
+    story.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(story)
+    return story

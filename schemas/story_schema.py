@@ -82,6 +82,122 @@ class StoryItemResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class StoryPatchJson(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    tags: Optional[list[str]] = None
+    image: Optional[str] = Field(
+        default=None, description='https URL when sending JSON, or set via multipart file/file_url',
+    )
+
+    @field_validator('title')
+    @classmethod
+    def title_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        t = (v or '').strip()
+        if not t:
+            raise ValueError('title must not be empty when provided')
+        return t[:500]
+
+    @field_validator('description')
+    @classmethod
+    def description_min_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if len(v.strip()) < 500:
+            raise ValueError('Description must be at least 500 characters when provided')
+        return v
+
+    @field_validator('location', mode='before')
+    @classmethod
+    def empty_location_to_none(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+    @field_validator('location')
+    @classmethod
+    def location_max(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return v.strip()[:500]
+
+    @field_validator('image')
+    @classmethod
+    def image_url_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        t = str(v).strip()[:20_000]
+        if not t:
+            return None
+        if re.match(r'https?://', t, re.I):
+            return t
+        if t.startswith('/'):
+            return t
+        raise ValueError('Image must be a valid http(s) URL or a public path starting with /')
+
+    @field_validator('tags', mode='before')
+    @classmethod
+    def tags_before(cls, v):
+        if v is None:
+            return None
+        return v
+
+    @field_validator('tags')
+    @classmethod
+    def each_tag_str(cls, v: Optional[list]) -> Optional[list[str]]:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError('tags must be an array of strings')
+        out: list[str] = []
+        for item in v:
+            if not isinstance(item, str):
+                raise ValueError('Each tag must be a string')
+            s = item.strip()
+            if s:
+                out.append(s)
+        return out or []
+
+
+class StoryPatchResponse(BaseModel):
+    message: str = 'Story updated successfully'
+    story: StoryItemResponse
+
+
+class AllStoriesV1User(BaseModel):
+    firstname: str
+    lastname: str
+    facebook: Optional[str] = None
+    twitter: Optional[str] = None
+    linkedin: Optional[str] = None
+    instagram: Optional[str] = None
+    youtube: Optional[str] = None
+    about_author: Optional[str] = None
+    profession: Optional[str] = None
+
+
+class AllStoriesV1Item(BaseModel):
+    id: int
+    user_id: int
+    image: str
+    title: str
+    description: str
+    location: Optional[str] = None
+    tags: Optional[list[str]] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    user: AllStoriesV1User
+    total_likes: int
+    total_dislikes: int
+
+
 class StoryCreatedResponse(BaseModel):
     message: str = 'Story created successfully'
     story: StoryItemResponse
