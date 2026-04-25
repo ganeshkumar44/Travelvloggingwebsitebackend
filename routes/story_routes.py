@@ -4,12 +4,12 @@ from typing import Annotated, Any, Optional
 
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     File,
     Form,
     HTTPException,
     Path,
-    Request,
     UploadFile,
     status,
 )
@@ -54,6 +54,44 @@ UPLOAD_ROOT = os.path.join(
 )
 
 
+def _run_story_patch(
+    raw: dict[str, Any],
+    story_id: int,
+    requester_id: int,
+    requester_role: str,
+    db: Session,
+) -> StoryPatchResponse:
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No fields to update',
+        )
+    try:
+        p = StoryPatchJson.model_validate(raw)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.errors(),
+        ) from e
+    updates = p.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No fields to update',
+        )
+    story = update_story_partial(
+        db=db,
+        story_id=story_id,
+        requester_id=requester_id,
+        requester_role=requester_role,
+        updates=updates,
+    )
+    return StoryPatchResponse(
+        message='Story updated successfully',
+        story=story,
+    )
+
+
 @router.get(
     '/all-stories',
     response_model=list[StoryItemResponse],
@@ -77,118 +115,116 @@ def fetch_all_stories_v1_endpoint(db: Session = Depends(get_db)):
 
 
 @router.patch(
-    '/v1/stories/{story_id}',
+    '/v1/stories/{story_id}/upload',
     response_model=StoryPatchResponse,
-    summary='Update a story (author or admin)',
+    summary='Update a story (multipart / file or image URL, same as POST /stories/upload)',
     description=(
-        '**Authorize** with Bearer token. The caller is always determined from the JWT, never the body. '
-        '**Story author** or **admin** can update. Send `application/json` with any combination of fields, '
-        'or `multipart/form-data` with the same (optional `file` and/or `file_url` for image, same as upload).'
+        '`multipart/form-data` only. **Authorize** with Bearer token. '
+        '**Story author** or **admin** can update. All fields are **optional**  omit what you do not want to change. '
+        'Provide **either** `file` (binary) **or** `file_url` (https) to change the image, or leave both out to keep the current image. '
+        '**Tags** support the same flexible formats as **POST /stories/upload**; omit the `tags` form parts entirely to leave existing tags. '
+        'For a JSON request body, use **PATCH** `/v1/stories/{story_id}` (application/json).'
     ),
 )
-async def patch_story_v1(
+async def patch_story_v1_multipart(
     story_id: Annotated[int, Path(ge=1, description='Story id')],
-    request: Request,
+    db: Session = Depends(get_db),
+    current_user_email: str = Depends(verify_token),
+    title: Optional[str] = Form(
+        default=None,
+        description='New title, or omit to leave unchanged',
+    ),
+    description: Optional[str] = Form(
+        default=None,
+        description='New description, or omit; min 500 characters if you send a new description',
+    ),
+    location: Optional[str] = Form(
+        default=None,
+        description='New location, or omit to leave unchanged. Send an empty value to clear.',
+    ),
+    tags: list[str] = Form(
+        default_factory=list,
+        description=TAGS_MULTIPART_FORM_DESCRIPTION,
+    ),
+    file: Optional[UploadFile] = File(
+        default=None,
+        description='Image file (jpeg, png, gif, webp; max 10MB). If present (with a filename and bytes), it overrides `file_url` for the new image path.',
+    ),
+    file_url: Optional[str] = Form(
+        default=None,
+        description='https URL to a new image. Use if not uploading a file. Both may be omitted to keep the existing image.',
+    ),
+):
+    requester_id, requester_role = get_user_id_and_role_by_email(
+        db, current_user_email
+    )
+    raw: dict[str, Any] = {}
+    if title is not None:
+        raw['title'] = str(title)
+    if description is not None:
+        raw['description'] = str(description)
+    if location is not None:
+        t = str(location)
+        raw['location'] = t.strip() if t and t.strip() else None
+    if tags:
+        try:
+            ntags = normalize_multipart_tag_inputs(tags)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
+        if ntags is not None:
+            raw['tags'] = ntags
+
+    file_body = b''
+    if file is not None and isinstance(file, UploadFile) and file.filename and str(
+        file.filename
+    ).strip():
+        file_body = await file.read() or b''
+    if file_body and len(file_body) > 0:
+        if len(file_body) > STORY_IMAGE_MAX_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Image file is too large',
+            )
+        raw['image'] = save_uploaded_story_image_bytes(
+            body=file_body,
+            content_type=file.content_type,
+            storage_root=UPLOAD_ROOT,
+        )
+    elif file_url and str(file_url).strip():
+        raw['image'] = _validate_file_url(str(file_url).strip())
+
+    return _run_story_patch(
+        raw, story_id, requester_id, requester_role, db
+    )
+
+
+@router.patch(
+    '/v1/stories/{story_id}',
+    response_model=StoryPatchResponse,
+    summary='Update a story (JSON / application/json)',
+    description=(
+        '**Content-Type: application/json** only. **Authorize** with Bearer token. '
+        '**Story author** or **admin** can update. Send any combination of `title`, `description`, `location`, `tags`, `image` (URL). '
+        'For `multipart/form-data` with `file` / `file_url`, use **PATCH** `/v1/stories/{story_id}/upload` (same fields as **POST** `/stories/upload`).'
+    ),
+)
+def patch_story_v1_json(
+    story_id: Annotated[int, Path(ge=1, description='Story id')],
+    body: StoryPatchJson = Body(
+        ...,
+        description='Field-level optional partial update. Omit a property in JSON to leave it unchanged.',
+    ),
     db: Session = Depends(get_db),
     current_user_email: str = Depends(verify_token),
 ):
     requester_id, requester_role = get_user_id_and_role_by_email(
         db, current_user_email
     )
-    ct = (request.headers.get('content-type') or '').lower()
-    raw: dict[str, Any] = {}
-
-    if 'multipart/form-data' in ct:
-        form = await request.form()
-        if 'title' in form:
-            raw['title'] = str(form.get('title') or '')
-        if 'description' in form:
-            raw['description'] = str(form.get('description') or '')
-        if 'location' in form:
-            loc = form.get('location')
-            if loc is not None and str(loc).strip():
-                raw['location'] = str(loc)
-            else:
-                raw['location'] = None
-        if 'tags' in form:
-            tag_vals = form.getlist('tags')
-            try:
-                raw['tags'] = normalize_multipart_tag_inputs(tag_vals)
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
-
-        file = form.get('file')
-        file_url = form.get('file_url')
-        file_bytes = b''
-        if file is not None and isinstance(file, UploadFile):
-            if file.filename and str(file.filename).strip():
-                file_bytes = await file.read() or b''
-        if file_bytes and len(file_bytes) > 0:
-            if len(file_bytes) > STORY_IMAGE_MAX_BYTES:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Image file is too large',
-                )
-            public_url = save_uploaded_story_image_bytes(
-                body=file_bytes,
-                content_type=file.content_type,
-                storage_root=UPLOAD_ROOT,
-            )
-            raw['image'] = public_url
-        elif file_url and str(file_url).strip():
-            raw['image'] = _validate_file_url(str(file_url).strip())
-    elif 'application/json' in ct:
-        try:
-            data = await request.json()
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid JSON body',
-            ) from e
-        if not isinstance(data, dict):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='JSON body must be an object',
-            )
-        raw = data
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail='Content-Type must be application/json or multipart/form-data',
-        )
-
-    if not raw:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No fields to update',
-        )
-
-    try:
-        p = StoryPatchJson.model_validate(raw)
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=e.errors(),
-        ) from e
-    updates = p.model_dump(exclude_unset=True)
-
-    if not updates:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No fields to update',
-        )
-
-    story = update_story_partial(
-        db=db,
-        story_id=story_id,
-        requester_id=requester_id,
-        requester_role=requester_role,
-        updates=updates,
-    )
-    return StoryPatchResponse(
-        message='Story updated successfully', story=story
+    raw = body.model_dump(exclude_unset=True, exclude_none=False)
+    return _run_story_patch(
+        raw, story_id, requester_id, requester_role, db
     )
 
 
