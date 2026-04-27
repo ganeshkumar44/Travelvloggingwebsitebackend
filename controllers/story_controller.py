@@ -13,6 +13,7 @@ from models.user_model import User
 
 STORY_TAG_MAX = 100
 STORY_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+STORY_DEFAULT_STATUS = 'pending'
 IMAGE_TYPES_TO_EXT = {
     'image/jpeg': '.jpg',
     'image/jpg': '.jpg',
@@ -126,6 +127,7 @@ def create_story_record(
         description=description,
         location=loc,
         image=image_url.strip()[:20_000],
+        status=STORY_DEFAULT_STATUS,
         tags=tag_values_for_array,
     )
     db.add(story)
