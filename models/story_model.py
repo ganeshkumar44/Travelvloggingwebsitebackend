@@ -29,6 +29,7 @@ class Story(Base):
     description = Column(Text, nullable=False)
     location = Column(String(500), nullable=True)
     image = Column(Text, nullable=False)
+    status = Column(String(100), nullable=True)
     tags = Column(ARRAY(String), nullable=True)
     created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))

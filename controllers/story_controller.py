@@ -193,6 +193,7 @@ def get_all_stories_v1(db: Session) -> list[dict[str, object]]:
                 "image": story.image,
                 "title": story.title,
                 "description": story.description,
+                "status": story.status,
                 "location": story.location,
                 "tags": story.tags,
                 "created_at": story.created_at,

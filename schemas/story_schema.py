@@ -77,6 +77,7 @@ class StoryItemResponse(BaseModel):
     description: str
     location: Optional[str] = None
     image: str
+    status: Optional[str] = None
     tags: Optional[list[str]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -86,6 +87,7 @@ class StoryByIdResponse(BaseModel):
     title: str
     image: str
     description: str
+    status: Optional[str] = None
     tags: Optional[list[str]] = None
     location: Optional[str] = None
 
@@ -201,6 +203,7 @@ class AllStoriesV1Item(BaseModel):
     image: str
     title: str
     description: str
+    status: Optional[str] = None
     location: Optional[str] = None
     tags: Optional[list[str]] = None
     created_at: Optional[datetime] = None

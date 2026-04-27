@@ -132,6 +132,7 @@ def fetch_story_by_id(
         'title': story.title,
         'image': story.image,
         'description': story.description,
+        'status': story.status,
         'tags': story.tags,
         'location': story.location,
     }
