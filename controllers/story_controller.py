@@ -392,3 +392,24 @@ def delete_story(
         )
     db.delete(story)
     db.commit()
+
+
+def update_story_approval_status(
+    db: Session,
+    story_id: int,
+    new_status: str,
+    requester_role: str,
+) -> Story:
+    if requester_role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Not authorized to update story status',
+        )
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail='Story not found')
+    story.status = new_status
+    story.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(story)
+    return story

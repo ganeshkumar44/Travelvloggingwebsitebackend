@@ -96,6 +96,18 @@ class StoryDeletedResponse(BaseModel):
     message: str = 'Story deleted successfully'
 
 
+class StoryStatusPatchRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    story_id: int = Field(..., ge=1)
+    status: Literal['approved', 'rejected', 'deleted']
+
+
+class StoryStatusPatchResponse(BaseModel):
+    message: str = 'Story status updated successfully'
+    story: StoryItemResponse
+
+
 class StoryPatchJson(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
