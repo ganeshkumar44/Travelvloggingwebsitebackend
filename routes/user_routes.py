@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -39,8 +39,34 @@ from models.user_model import User
 
 router = APIRouter(tags=['Users'])
 
+
+def require_admin_user(
+    current_user_email: str = Depends(verify_token),
+    db: Session = Depends(get_db),
+) -> User:
+    """
+    JWT is validated by verify_token (401 if missing/invalid).
+    Only users with role 'admin' may proceed (403 otherwise).
+    """
+    user = db.query(User).filter(User.email == current_user_email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+    if (user.role or '').strip().lower() != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Not authorized: only administrators can access this resource',
+        )
+    return user
+
+
 @router.get('/users', response_model=list[UserResponse])
-def get_users(db: Session = Depends(get_db)):
+def get_users(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user),
+):
     return get_all_users(db)
 
 @router.post('/register', response_model=UserResponse)
