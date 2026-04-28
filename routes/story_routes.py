@@ -201,7 +201,7 @@ def delete_story_v1(
     description=(
         '`multipart/form-data` only. **Authorize** with Bearer token. '
         '**Story author** or **admin** can update. All fields are **optional**  omit what you do not want to change. '
-        'Provide **either** `file` (binary) **or** `file_url` (https) to change the image, or leave both out to keep the current image. '
+        'To change the image, send **either** `file` **or** `file_url`, never both (request will be rejected with a validation error). Omit both to keep the current image. '
         '**Tags** support the same flexible formats as **POST /stories/upload**; omit the `tags` form parts entirely to leave existing tags. '
         'For a JSON request body, use **PATCH** `/v1/stories/{story_id}` (application/json).'
     ),
@@ -228,11 +228,17 @@ async def patch_story_v1_multipart(
     ),
     file: Optional[UploadFile] = File(
         default=None,
-        description='Image file (jpeg, png, gif, webp; max 10MB). If present (with a filename and bytes), it overrides `file_url` for the new image path.',
+        description=(
+            'Image file (jpeg, png, gif, webp; max 10MB). '
+            'Mutually exclusive with `file_url` — do not send both. Omit with `file_url` to keep the current image.'
+        ),
     ),
     file_url: Optional[str] = Form(
         default=None,
-        description='https URL to a new image. Use if not uploading a file. Both may be omitted to keep the existing image.',
+        description=(
+            'https URL to a new image. Mutually exclusive with `file` — do not send both. '
+            'Omit with `file` to keep the current image.'
+        ),
     ),
 ):
     requester_id, requester_role = get_user_id_and_role_by_email(
@@ -256,12 +262,25 @@ async def patch_story_v1_multipart(
         if ntags is not None:
             raw['tags'] = ntags
 
-    file_body = b''
-    if file is not None and isinstance(file, UploadFile) and file.filename and str(
-        file.filename
-    ).strip():
-        file_body = await file.read() or b''
-    if file_body and len(file_body) > 0:
+    has_file = (
+        file is not None
+        and isinstance(file, UploadFile)
+        and file.filename
+        and str(file.filename).strip() != ""
+    )
+    has_file_url = file_url is not None and str(file_url).strip() != ""
+
+    if has_file and has_file_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Please provide either file or file_url, not both',
+        )
+
+    file_body = b""
+    if has_file:
+        file_body = await file.read() or b""
+
+    if has_file and file_body and len(file_body) > 0:
         if len(file_body) > STORY_IMAGE_MAX_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -272,7 +291,7 @@ async def patch_story_v1_multipart(
             content_type=file.content_type,
             storage_root=UPLOAD_ROOT,
         )
-    elif file_url and str(file_url).strip():
+    elif has_file_url:
         raw['image'] = _validate_file_url(str(file_url).strip())
 
     return _run_story_patch(
