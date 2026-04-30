@@ -52,6 +52,7 @@ from schemas.story_schema import (
     get_post_stories_openapi_extra,
     normalize_multipart_tag_inputs,
 )
+from services.s3_story_image import upload_story_image_bytes_to_s3
 
 router = APIRouter(tags=['Stories'])
 
@@ -529,6 +530,123 @@ async def add_story_multipart(
             body=file_body,
             content_type=file.content_type,
             storage_root=UPLOAD_ROOT,
+        )
+    elif file_url and str(file_url).strip():
+        public_url = _validate_file_url(str(file_url))
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Provide a file in field "file" or an https URL in "file_url".',
+        )
+
+    story = create_story_record(
+        db=db,
+        user_id=current_user_id,
+        title=title_s,
+        description=desc_s,
+        location=loc_val,
+        image_url=public_url,
+        tag_strings=tag_list,
+    )
+    return StoryCreatedResponse(
+        message='Story created successfully',
+        story=story,
+    )
+
+
+@router.post(
+    '/v1/stories/upload',
+    response_model=StoryCreatedResponse,
+    summary='Create a new story (multipart / file or URL, image to S3)',
+    description=(
+        'Same behavior as **POST /stories/upload** (`multipart/form-data`, same fields and validations), '
+        'except binary **file** uploads are stored in **AWS S3** and the story **image** field is the resulting public URL. '
+        '**file_url** is stored directly unchanged. Requires `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, '
+        '`AWS_REGION`, and `AWS_BUCKET_NAME` in the environment.\n\n'
+        '`multipart/form-data` with `title` and `description` (min 500 chars). '
+        'Provide **either** `file` (binary upload) **or** `file_url` (https link), not both required, '
+        'but if `file` is sent and has content, it is preferred over `file_url`.\n\n'
+        '**Tags:** add multiple `tags` entries in Swagger (Add item), or one value per string format '
+        '(see the **tags** field description on this form). '
+        'Single value, comma-separated, JSON array, or several form fields are all supported.\n\n'
+        '**cURL (multipart, file to S3):**\n```\n'
+        'curl -X POST "http://localhost:8000/v1/stories/upload" \\\n'
+        '  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \\\n'
+        "  -F 'title=My story' \\\n"
+        "  -F 'description=MIN500CHARS...' \\\n"
+        "  -F 'file=@/path/to/photo.jpg'\n```\n\n"
+        '**cURL (multipart, URL instead of file):**\n```\n'
+        'curl -X POST "http://localhost:8000/v1/stories/upload" \\\n'
+        '  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \\\n'
+        "  -F 'title=My story' \\\n"
+        "  -F 'description=MIN500CHARS...' \\\n"
+        "  -F 'file_url=https://example.com/p.jpg'\n```"
+    ),
+)
+async def add_story_multipart_s3(
+    current_user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+    title: str = Form(..., description='Story title'),
+    description: str = Form(
+        ...,
+        description='At least 500 characters',
+    ),
+    location: Optional[str] = Form(
+        default=None,
+        description='Optional location',
+    ),
+    tags: list[str] = Form(
+        default_factory=list,
+        description=TAGS_MULTIPART_FORM_DESCRIPTION,
+    ),
+    file: Optional[UploadFile] = File(
+        default=None,
+        description='Image file (jpeg, png, gif, webp; max 10MB). Uploaded to S3. Use this or file_url.',
+    ),
+    file_url: Optional[str] = Form(
+        default=None,
+        description='https URL to an image. Use this if not uploading a file.',
+    ),
+):
+    title_s = (title or '').strip()[:500]
+    if not title_s:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='title is required',
+        )
+    desc_s = description or ''
+    if len(desc_s.strip()) < 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Description must be at least 500 characters',
+        )
+
+    loc_val: Optional[str] = None
+    if location and str(location).strip():
+        loc_val = str(location).strip()[:500]
+
+    try:
+        tag_list = normalize_multipart_tag_inputs(tags)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    if file is not None:
+        file_body = await file.read()
+    else:
+        file_body = b''
+
+    if file_body and len(file_body) > 0:
+        if len(file_body) > STORY_IMAGE_MAX_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Image file is too large',
+            )
+        public_url = upload_story_image_bytes_to_s3(
+            body=file_body,
+            content_type=file.content_type,
         )
     elif file_url and str(file_url).strip():
         public_url = _validate_file_url(str(file_url))
