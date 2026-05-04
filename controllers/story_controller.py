@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from models.story_model import Story, StoryComment, StoryReaction, Tag
 from models.user_model import User
+from schemas.story_schema import StoryItemResponse
 
 
 STORY_TAG_MAX = 100
@@ -405,7 +406,7 @@ def update_story_approval_status(
     story_id: int,
     new_status: str,
     requester_role: str,
-) -> Story:
+) -> tuple[str, StoryItemResponse]:
     if requester_role != 'admin':
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -414,8 +415,13 @@ def update_story_approval_status(
     story = db.query(Story).filter(Story.id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail='Story not found')
+    if new_status == 'deleted':
+        payload = StoryItemResponse.model_validate(story)
+        db.delete(story)
+        db.commit()
+        return 'Story deleted successfully', payload
     story.status = new_status
     story.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(story)
-    return story
+    return 'Story status updated successfully', StoryItemResponse.model_validate(story)

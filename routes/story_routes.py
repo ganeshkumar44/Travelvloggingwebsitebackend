@@ -159,8 +159,9 @@ def fetch_story_by_id(
     response_model=StoryStatusPatchResponse,
     summary='Update story approval status (admin only)',
     description=(
-        '**Content-Type: application/json**. **Authorize** with Bearer token. **Admin only** — sets `status` to '
-        '`approved`, `rejected`, or `deleted` (soft); does not remove the row. '
+        '**Content-Type: application/json**. **Authorize** with Bearer token. **Admin only** — '
+        '`approved` / `rejected` update the `status` field only. '
+        '`deleted` permanently removes the story row (and related rows via DB `ON DELETE CASCADE`). '
     ),
 )
 def patch_story_status_v1(
@@ -169,14 +170,14 @@ def patch_story_status_v1(
     current_user_email: str = Depends(verify_token),
 ):
     _, requester_role = get_user_id_and_role_by_email(db, current_user_email)
-    story = update_story_approval_status(
+    message, story = update_story_approval_status(
         db=db,
         story_id=body.story_id,
         new_status=body.status,
         requester_role=requester_role,
     )
     return {
-        'message': 'Story status updated successfully',
+        'message': message,
         'story': story,
     }
 
