@@ -268,6 +268,13 @@ class StoryCommentCreatedResponse(BaseModel):
     comment: StoryCommentItemResponse
 
 
+class StoryTagItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
 def get_post_stories_openapi_extra() -> dict[str, Any]:
     """
     Request body for POST /stories (JSON). Multipart is documented on POST /stories/upload.

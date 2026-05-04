@@ -25,6 +25,7 @@ from controllers.story_controller import (
     delete_story,
     get_all_stories,
     get_all_stories_v1,
+    get_all_tags_sorted_by_name,
     get_story_by_id,
     get_user_id_and_role_by_email,
     get_user_id_by_email,
@@ -37,6 +38,7 @@ from schemas.story_schema import (
     TAGS_MULTIPART_FORM_DESCRIPTION,
     AllStoriesV1Item,
     StoryByIdResponse,
+    StoryTagItem,
     StoryDeletedResponse,
     StoryCommentCreatedResponse,
     StoryCommentRequest,
@@ -120,6 +122,16 @@ def fetch_all_stories(db: Session = Depends(get_db)):
 )
 def fetch_all_stories_v1_endpoint(db: Session = Depends(get_db)):
     return get_all_stories_v1(db)
+
+
+@router.get(
+    '/v1/storytags',
+    response_model=list[StoryTagItem],
+    summary='Fetch all story tags',
+    description='Returns every row from the `tags` table, sorted alphabetically by `name` (ascending).',
+)
+def fetch_all_story_tags(db: Session = Depends(get_db)):
+    return get_all_tags_sorted_by_name(db)
 
 
 @router.get(

@@ -23,6 +23,10 @@ IMAGE_TYPES_TO_EXT = {
 }
 
 
+def get_all_tags_sorted_by_name(db: Session) -> list[Tag]:
+    return db.query(Tag).order_by(Tag.name.asc()).all()
+
+
 def get_user_id_by_email(db: Session, email: str) -> int:
     user = db.query(User).filter(User.email == email).first()
     if not user:
